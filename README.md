@@ -815,3 +815,14 @@ sudo docker stack deploy --resolve-image never -c stack.yml todoapp
 ---
 
 **Összegzés:** A Flowdesk egyszerre mutat be működő üzleti funkciókat (feladatkezelés és tartós adattárolás) és Docker Swarm üzemeltetési feladatokat (stack telepítés, replikáció, overlay hálózat, Secret, Volume, skálázás, önjavítás, nyilvános elérés). A GitHub-repozitórium tartalmazza az alkalmazás forráskódját, konfigurációját és tesztjeit, így a megoldás felépítése és működése mások számára is ellenőrizhető.
+
+---
+
+## Védési dokumentáció
+
+A Docker Swarm szolgáltatások, a saját Docker image-ek, az overlay hálózatok, a PostgreSQL-adattárolás, a skálázás és az automatikus helyreállítás ellenőrzése.
+
+- [Védési áttekintés – PDF](docs/Flowdesk_Vedesi_Attekintes.pdf)
+- [Parancsok és működési ellenőrzések](docs/VEDES_TESZTEK.md)
+
+A dokumentumok a végrehajtott parancsokat, azok rövid magyarázatát és a tesztelés során készített képernyőképeket tartalmazzák.
