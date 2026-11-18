@@ -1,132 +1,191 @@
+
 # Flowdesk 2.0 – Feladatmenedzsment alkalmazás Docker Swarm környezetben
 
-> **Projekt:** három együttműködő szolgáltatásból álló, reszponzív webalkalmazás, saját Docker image-ekkel, Docker Swarm orchesztrációval, overlay hálózatokkal, PostgreSQL-adatmegőrzéssel, skálázással és nyilvános HTTPS-elérési lehetőséggel.
->
-> **Forráskód:** https://github.com/Fmate2003/flowdesk  
-> **Állapot:** működő helyi demó; a nyilvános TryCloudflare-link ideiglenes, csak futó tunnel mellett elérhető.
+A **Flowdesk** egy reszponzív, böngészőből használható feladatmenedzsment alkalmazás, amely Docker Swarm környezetben működik.
+
+A rendszer három együttműködő szolgáltatásból áll: Nginx frontendből, Python Flask backendből és PostgreSQL-adatbázisból.
+
+A projekt megvalósítja a konténeralapú telepítést, a szolgáltatások közötti kommunikációt, a tartós adattárolást, a horizontális skálázást és az automatikus konténer-helyreállítást. Az alkalmazás Cloudflare Tunnel használatával nyilvános HTTPS-címen is elérhetővé tehető.
+
+**Forráskód:** https://github.com/Fmate2003/flowdesk
 
 ## Tartalomjegyzék
 
-1. [A projekt célja és a megvalósított funkciók](#1-a-projekt-célja-és-a-megvalósított-funkciók)
-2. [Architektúra és szolgáltatások](#2-architektúra-és-szolgáltatások)
-3. [Felhasznált technológiák és alapfogalmak](#3-felhasznált-technológiák-és-alapfogalmak)
-4. [Fejlesztői környezet előkészítése Windows és WSL alatt](#4-fejlesztői-környezet-előkészítése-windows-és-wsl-alatt)
-5. [A projekt felépítése és fejlesztési folyamata](#5-a-projekt-felépítése-és-fejlesztési-folyamata)
-6. [Telepítés nulláról – pontos parancsok](#6-telepítés-nulláról--pontos-parancsok)
-7. [Működési ellenőrzés és API-tesztek](#7-működési-ellenőrzés-és-api-tesztek)
-8. [Feladatkövetelmények és igazoló parancsok](#8-feladatkövetelmények-és-igazoló-parancsok)
-9. [Részletes demonstráció: skálázás, önjavítás, adatmegőrzés](#9-részletes-demonstráció-skálázás-önjavítás-adatmegőrzés)
-10. [Nyilvános HTTPS-elérés Cloudflare Tunnel segítségével](#10-nyilvános-https-elérés-cloudflare-tunnel-segítségével)
-11. [Automatizált tesztek](#11-automatizált-tesztek)
-12. [Leállítás, újraindítás, adatok megőrzése](#12-leállítás-újraindítás-adatok-megőrzése)
-13. [Git és GitHub – forráskód publikálása](#13-git-és-github--forráskód-publikálása)
+1. [A projekt célja és funkciói](#1-a-projekt-célja-és-funkciói)
+2. [Rendszerarchitektúra](#2-rendszerarchitektúra)
+3. [Felhasznált technológiák](#3-felhasznált-technológiák)
+4. [Fejlesztői környezet](#4-fejlesztői-környezet)
+5. [Projektstruktúra és megvalósítás](#5-projektstruktúra-és-megvalósítás)
+6. [Telepítés Docker Swarm alatt](#6-telepítés-docker-swarm-alatt)
+7. [API és alkalmazásműködés](#7-api-és-alkalmazásműködés)
+8. [Docker Swarm konfiguráció ellenőrzése](#8-docker-swarm-konfiguráció-ellenőrzése)
+9. [Skálázás és automatikus helyreállítás](#9-skálázás-és-automatikus-helyreállítás)
+10. [Nyilvános HTTPS-elérés](#10-nyilvános-https-elérés)
+11. [Automatizált tesztelés](#11-automatizált-tesztelés)
+12. [Leállítás és újraindítás](#12-leállítás-és-újraindítás)
+13. [Verziókövetés GitHubon](#13-verziókövetés-githubon)
 14. [Hibaelhárítás](#14-hibaelhárítás)
-15. [Biztonság, korlátok és továbbfejlesztési lehetőségek](#15-biztonság-korlátok-és-továbbfejlesztési-lehetőségek)
-16. [Bemutató forgatókönyv és ellenőrzőlista](#16-bemutató-forgatókönyv-és-ellenőrzőlista)
+15. [Biztonság és továbbfejlesztés](#15-biztonság-és-továbbfejlesztés)
+16. [Tesztelési dokumentáció](#16-tesztelési-dokumentáció)
 
 ---
 
-## 1. A projekt célja és a megvalósított funkciók
+## 1. A projekt célja és funkciói
 
-A **Flowdesk** egy böngészőből használható feladatmenedzsment alkalmazás. A felhasználó feladatokat hozhat létre, módosíthat, befejezettnek jelölhet és törölhet. A feladatok PostgreSQL-adatbázisban tárolódnak, nem a böngésző memóriájában. A projekt célja emellett egy működő, több szolgáltatásból álló konténeres rendszer összeállítása és üzemeltetési viselkedésének bemutatása.
+A Flowdesk célja egy egyszerűen használható feladatmenedzsment rendszer kialakítása, amely a hagyományos alkalmazásfunkciók mellett konténeres infrastruktúrán működik.
+
+Az alkalmazás lehetővé teszi a feladatok létrehozását, módosítását, rendszerezését, teljesítettnek jelölését és törlését.
 
 ### Felhasználói funkciók
 
-- Feladat **létrehozása**, **listázása**, **szerkesztése**, **elkészültnek jelölése** és **törlése**.
-- Feladat neve, részletes leírása, kategóriája (`work`, `personal`, `study`, `other`), prioritása (`low`, `medium`, `high`) és opcionális határideje.
-- Áttekintő kártyák: összes, folyamatban lévő, elkészült és lejárt feladatok.
-- Szöveges keresés, állapot szerinti szűrés, rendezés, mobilon is használható megjelenés.
-- Mentett feladatok visszaolvasása oldalfrissítés vagy konténercsere után.
+- Feladatok létrehozása, szerkesztése és törlése.
+- Feladatok teljesítettnek jelölése.
+- Feladatleírások megadása.
+- Kategóriák kezelése: munka, személyes, tanulás és egyéb.
+- Prioritások beállítása: alacsony, normál és magas.
+- Határidők rögzítése.
+- Feladatok keresése, szűrése és rendezése.
+- Áttekintő statisztikák megjelenítése.
+- Reszponzív felület asztali és mobilos használatra.
 
-### Infrastruktúra-funkciók
+### Infrastrukturális funkciók
 
-- Saját Dockerfile-ból felépített frontend és backend image.
-- Három Swarm-szolgáltatás: `frontend`, `backend`, `database`.
-- Három backendpéldány alapértelmezetten; dinamikus skálázás.
-- Két elkülönített overlay hálózat.
-- Docker Secret alapú adatbázis-jelszókezelés.
-- Tartós PostgreSQL Docker Volume.
-- Egészségellenőrzések és a kiesett konténerfeladatok automatikus pótlása.
-- Ideiglenes, külső hálózatról elérhető HTTPS-demó Cloudflare Tunnel használatával.
+- Három együttműködő Docker Swarm-szolgáltatás.
+- Saját Dockerfile-ok és Docker image-ek.
+- Több példányban futó backend.
+- Overlay hálózatok.
+- PostgreSQL-adatok tárolása Docker Volume használatával.
+- Adatbázis-jelszó kezelése Docker Secrettel.
+- Konténer-egészségellenőrzések.
+- Automatikus konténer-helyreállítás.
+- Dinamikus skálázás.
+- Nyilvános HTTPS-elérés Cloudflare Tunnel segítségével.
 
-## 2. Architektúra és szolgáltatások
+---
+
+## 2. Rendszerarchitektúra
+
+A Flowdesk háromrétegű architektúrát használ.
 
 ```text
-Böngésző / telefon
-        |
-        | HTTP :8080 vagy HTTPS (Cloudflare Tunnel)
-        v
-+---------------------------+
-| Nginx frontend            |  1 replika
-| flowdesk-frontend:2.0     |  statikus HTML, CSS, JavaScript
-+---------------------------+
-        | /api/* proxy
-        | overlay: webnet
-        v
-+---------------------------+
-| Python Flask REST API     |  alapból 3 replika
-| flowdesk-backend:2.0      |  Gunicorn alkalmazásszerver
-+---------------------------+
-        | PostgreSQL :5432
-        | overlay: dbnet
-        v
-+---------------------------+
-| PostgreSQL 16-alpine      |  1 replika
-| database                  |
-+---------------------------+
-        |
-        v
-Docker Volume: todoapp_postgres_data
+               Böngésző / mobiltelefon
+                         |
+                         | HTTP / HTTPS
+                         v
+                 Nginx Frontend
+               flowdesk-frontend:2.0
+                      1 replika
+                         |
+                         | /api/*
+                         | todoapp_webnet
+                         v
+                 Python Flask API
+               flowdesk-backend:2.0
+                      3 replika
+                         |
+                         | todoapp_dbnet
+                         v
+                 PostgreSQL 16
+                      1 replika
+                         |
+                         v
+             todoapp_postgres_data
+                 Docker Volume
 ```
 
-| Szolgáltatás | Szerepe | Image | Replikák | Hálózat |
-|---|---|---|---:|---|
-| `todoapp_frontend` | Felhasználói felület és API-továbbítás | `flowdesk-frontend:2.0` | 1 | `todoapp_webnet` |
-| `todoapp_backend` | Üzleti logika és adatbázis-hozzáférés | `flowdesk-backend:2.0` | 3 | `todoapp_webnet`, `todoapp_dbnet` |
-| `todoapp_database` | Feladatok tartós tárolása | `postgres:16-alpine` | 1 | `todoapp_dbnet` |
+### 2.1. Frontend
 
-**Miért két hálózat?** A böngésző a frontendhez csatlakozik, az Nginx a backendhez továbbítja az `/api/` kéréseket. A PostgreSQL csak a belső `dbnet` hálózaton érhető el, nincs közvetlenül publikált `5432`-es portja. Ez elkülöníti az adatbázist a webes belépési ponttól.
+A frontend Nginx webszerveren keresztül szolgálja ki a HTML-, CSS- és JavaScript-fájlokat.
 
-**Miért több backendpéldány?** A Swarm szolgáltatásfelfedezése és belső forgalomelosztása lehetővé teszi, hogy a frontend egyetlen `backend` szolgáltatásnéven keresztül érje el a több példányban futó API-t.
+Az Nginx az `/api/` útvonalra érkező kéréseket továbbítja a backend szolgáltatásnak.
 
-**Korlát:** a bemutatott rendszer **egyetlen WSL-alapú Swarm node-on** fut. A replikáció konténerkiesés ellen segít, de nem véd a teljes fizikai gép vagy WSL-környezet kiesése ellen. A helyi PostgreSQL Volume sem többgépes, automatikusan replikált adattár.
+A frontend Docker image neve:
 
-## 3. Felhasznált technológiák és alapfogalmak
+`flowdesk-frontend:2.0`
+
+### 2.2. Backend
+
+A Python Flask alkalmazás valósítja meg a feladatkezelés üzleti logikáját.
+
+A backend REST API-végpontokon keresztül végzi a feladatok létrehozását, lekérdezését, módosítását és törlését.
+
+A szolgáltatás alapértelmezetten három példányban fut.
+
+A backend Docker image neve:
+
+`flowdesk-backend:2.0`
+
+A több backendpéldány lehetővé teszi a beérkező kérések elosztását, valamint a kiesett konténerpéldányok automatikus pótlását.
+
+### 2.3. Adatbázis
+
+Az alkalmazás PostgreSQL 16 adatbázist használ.
+
+A feladatok adatai nem a böngésző memóriájában, hanem az adatbázisban tárolódnak.
+
+A PostgreSQL a `todoapp_postgres_data` nevű Docker Volume-ot használja.
+
+A tartós adattárolásnak köszönhetően a mentett feladatok a PostgreSQL-konténer újraindítását vagy cseréjét követően is megmaradnak.
+
+### 2.4. Hálózati felépítés
+
+A rendszer két külön overlay hálózatot használ.
+
+| Hálózat | Kapcsolódó szolgáltatások |
+|---|---|
+| `todoapp_webnet` | Frontend, backend |
+| `todoapp_dbnet` | Backend, adatbázis |
+
+A frontend nem kapcsolódik közvetlenül az adatbázishoz. Az adatbázis kizárólag a backend számára elérhető belső hálózaton kommunikál.
+
+Ez a felépítés elkülöníti a webes és az adatbázis-réteget.
+
+---
+
+## 3. Felhasznált technológiák
 
 | Technológia | Feladat |
 |---|---|
-| **Windows + WSL 2 + Ubuntu** | Linux fejlesztői és futtatási környezet Windows alatt |
-| **Visual Studio Code + WSL bővítmény** | Forráskódszerkesztés és Ubuntu terminál |
-| **Docker Engine** | Konténerek és image-ek kezelése |
-| **Dockerfile** | Saját alkalmazás-image felépítésének receptje |
-| **Docker Swarm** | Szolgáltatások, replikák, hálózatok és helyreállítás kezelése |
-| **Docker Stack / `stack.yml`** | A teljes háromszolgáltatásos telepítés deklaratív leírása |
-| **Nginx** | Statikus weboldal és fordított proxy (*reverse proxy*) |
-| **Flask + Gunicorn** | Python-alapú REST API és alkalmazásszerver |
-| **PostgreSQL** | Relációs adatbázis |
-| **Docker Volume** | Konténercserét túlélő adattárolás |
-| **Docker Secret** | Adatbázis-jelszó átadása fájlként a konténereknek |
-| **Cloudflare Tunnel** | Ideiglenes HTTPS-elérés internet felől |
-| **Git / GitHub** | Verziókövetés és forráskód-megosztás |
+| Windows 10 | Hoszt operációs rendszer |
+| WSL 2 | Linux futtatókörnyezet Windows alatt |
+| Ubuntu | Fejlesztési és Docker-környezet |
+| Visual Studio Code | Forráskódszerkesztés |
+| Docker Engine | Konténerek futtatása |
+| Dockerfile | Saját Docker image-ek felépítése |
+| Docker Swarm | Szolgáltatások kezelése |
+| Docker Stack | Többszolgáltatásos telepítés |
+| Nginx | Webszerver és reverse proxy |
+| Python Flask | Backend API |
+| Gunicorn | Python alkalmazásszerver |
+| PostgreSQL | Relációs adatbázis |
+| Docker Volume | Tartós adattárolás |
+| Docker Secret | Bizalmas konfigurációs adatok kezelése |
+| Cloudflare Tunnel | Nyilvános HTTPS-elérés |
+| Git | Verziókövetés |
+| GitHub | Forráskód és dokumentáció tárolása |
 
-**Image:** futtatható konténer-sablon. **Konténer:** egy image-ből indított izolált folyamat. **Szolgáltatás (service):** a Swarm által kezelt, megadott számú konténerfeladat. **Replika:** ugyanabból a szolgáltatásból futó példány. **Overlay hálózat:** Swarm-szolgáltatásokat összekötő virtuális hálózat. **Volume:** a konténerek életciklusától független adatkötet. **REST API:** HTTP-végpontokat használó alkalmazásprogramozási interfész.
+---
 
-## 4. Fejlesztői környezet előkészítése Windows és WSL alatt
+## 4. Fejlesztői környezet
 
-A projekt Windows 10 alatt, Ubuntu WSL 2 környezetben, a VS Code WSL-integrációjával készült.
+A Flowdesk Windows 10 operációs rendszeren, Ubuntu WSL 2 környezetben készült.
 
-### 4.1. WSL / Ubuntu ellenőrzése (Windows PowerShell)
+A forráskód szerkesztéséhez Visual Studio Code-ot, a Docker-parancsok végrehajtásához Ubuntu terminált használtunk.
+
+### 4.1. WSL ellenőrzése
+
+Windows PowerShellben:
 
 ```powershell
 wsl --list --verbose
 wsl --version
 ```
 
-Elvárt: az `Ubuntu` disztribúció **VERSION 2** módban szerepeljen. Ha a WSL vagy az Ubuntu nincs telepítve, azt Windowsban külön telepíteni kell. A telepítés módja a Windows-verziótól függ; egy újabb rendszeren például `wsl --install -d Ubuntu` használható. **Meglévő, működő Ubuntut ne állítsunk alaphelyzetbe és ne töröljünk a projekt miatt.**
+A WSL 2 Linux virtuális környezetet biztosít Windows alatt.
 
-### 4.2. Terminál megnyitása VS Code-ban
+### 4.2. Projekt megnyitása
 
-Az Ubuntu terminálból a projektmappát így nyitottuk meg:
+A projekt helyi fejlesztési könyvtára:
 
 ```bash
 cd ~/flowdesk-v2/flowdesk-swarm
@@ -134,253 +193,275 @@ pwd
 code .
 ```
 
-A `pwd` a jelenlegi munkamappát írja ki. A `code .` megnyitja a mappát VS Code-ban. A VS Code terminálja legyen **WSL: Ubuntu** környezetben, ne Windows PowerShellben, mert az itt dokumentált `sudo` és `systemctl` parancsok Linux-parancsok.
+A `pwd` megjeleníti a jelenlegi könyvtárat, a `code .` pedig megnyitja azt a Visual Studio Code-ban.
 
-### 4.3. Docker Engine telepítése és indítása
+### 4.3. Docker Engine
 
-A projektben az Ubuntu `docker.io` csomagját használtuk. Új Ubuntu-környezetben, ha még nincs Docker:
+A Docker telepítése Ubuntu alatt:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y docker.io
-sudo systemctl start docker
-sudo systemctl enable docker
 ```
 
-Már telepített rendszeren csak indítás és ellenőrzés szükséges:
+A Docker szolgáltatás indítása:
 
 ```bash
 sudo systemctl start docker
+```
+
+A működés ellenőrzése:
+
+```bash
 systemctl is-active docker
 sudo docker version
 sudo docker run --rm hello-world
 ```
 
-**Elvárt eredmény:** a szolgáltatás állapota `active`, a Docker kliens/szerver verziója látható, a `hello-world` teszt sikeresen lefut.
+Az `active` állapot a Docker Engine működését jelzi. A `hello-world` konténer a Docker futtatókörnyezet alapvető működésének ellenőrzésére szolgál.
 
-> A `hello-world` csak az első környezeti ellenőrzéshez kell, nem része a Flowdesk háromszolgáltatásos stackjének.
+---
 
-## 5. A projekt felépítése és fejlesztési folyamata
+## 5. Projektstruktúra és megvalósítás
 
 ### 5.1. Könyvtárszerkezet
 
 ```text
 flowdesk-swarm/
-├── .env.example                  # helyi fejlesztési változók MINTÁJA, nem valódi titok
-├── .gitignore                    # nem publikálandó fájlok kizárása
-├── README.md                     # jelen dokumentáció
-├── stack.yml                     # Docker Swarm stack
+├── .env.example
+├── .gitignore
+├── README.md
+├── stack.yml
 ├── backend/
-│   ├── Dockerfile                # saját Python image
+│   ├── Dockerfile
 │   ├── .dockerignore
 │   ├── requirements.txt
-│   ├── app.py                    # Flask API, végpontok és validálás
-│   ├── db.py                     # PostgreSQL-kapcsolat, Docker Secret olvasása
-│   └── init_db.py                # adatbázisséma létrehozása/bővítése
+│   ├── app.py
+│   ├── db.py
+│   └── init_db.py
 ├── frontend/
-│   ├── Dockerfile                # saját Nginx image
+│   ├── Dockerfile
 │   ├── .dockerignore
-│   ├── nginx.conf                # /api/ proxyszabály
-│   ├── index.html               # oldalstruktúra
-│   ├── styles.css               # reszponzív megjelenés
-│   └── app.js                   # böngészőbeli működés és API-hívások
+│   ├── nginx.conf
+│   ├── index.html
+│   ├── styles.css
+│   └── app.js
 ├── docs/
-│   └── architecture.md          # rövid architektúraleírás
+│   ├── architecture.md
+│   ├── Flowdesk_Vedesi_Attekintes.pdf
+│   ├── VEDES_TESZTEK.md
+│   └── images/
 ├── scripts/
-│   └── smoke_test.py            # működő alkalmazáson végzett API-gyorsteszt
+│   └── smoke_test.py
 ├── tests/
-│   ├── test_api.py               # API-egységtesztek, adatbázis-szimulációval
-│   └── test_structure.py         # Swarm-konfigurációs követelmények ellenőrzése
-└── dev-requirements.txt          # fejlesztői Python-csomagok
+│   ├── test_api.py
+│   └── test_structure.py
+└── dev-requirements.txt
 ```
 
-### 5.2. Fejlesztési sorrend
+### 5.2. Frontend megvalósítása
 
-1. **Kezdeti megoldás:** egyszerű feladatlista három szolgáltatással (Nginx, Flask, PostgreSQL).
-2. **Konténerizálás:** külön backend és frontend `Dockerfile`, saját image-ek készítése.
-3. **Orchesztráció:** `stack.yml` összeállítása, replikák, overlay hálózatok, Secret és Volume hozzáadása.
-4. **Első működési tesztek:** helyi HTTP-elérés, feladat létrehozása és frissítést követő visszaolvasása.
-5. **Üzemeltetési tesztek:** adatbázis-konténer szándékos megszakítása, automatikus pótlás és adatok megmaradásának ellenőrzése; backend 3 → 5 → 3 skálázás.
-6. **Külső hozzáférés:** TryCloudflare Tunnel és másik eszközről végzett feladatmentési teszt.
-7. **Flowdesk 2.0:** teljesen új megjelenés, leírás/kategória/prioritás/határidő, statisztikák, keresés, szűrés és szerkesztés hozzáadása.
-8. **Adatbázis-frissítés:** a `backend/init_db.py` meglévő táblát is bővíteni képes, az előző feladatok törlése nélkül.
-9. **Verziókövetés:** Git-repozitórium és GitHub-forráskódfeltöltés.
+A `frontend/index.html` tartalmazza a felhasználói felület struktúráját.
 
-### 5.3. Hogyan működik a forráskód?
+A `frontend/styles.css` biztosítja a megjelenést és a reszponzív kialakítást.
 
-- A `frontend/index.html` adja a felület HTML-struktúráját, a `styles.css` a stílusokat, az `app.js` pedig `fetch` hívásokkal kezeli az adatokat.
-- A `frontend/nginx.conf` az `/api/` végpontokra érkező kéréseket a `backend:5000` címre továbbítja a belső hálózaton.
-- A `backend/app.py` Flask útvonalai végzik az adatok ellenőrzését, létrehozását, módosítását és törlését.
-- A `backend/db.py` a `/run/secrets/todo_db_password` fájlból olvassa a jelszót, és `psycopg` segítségével csatlakozik a PostgreSQL-hez.
-- A `backend/init_db.py` induláskor létrehozza vagy bővíti a `tasks` táblát. Az `ADD COLUMN IF NOT EXISTS` miatt meglévő mezőket és feladatokat nem ír felül. A PostgreSQL tranzakciós advisory lock egyszerre induló backendpéldányok mellett is rendezi a sémamódosításokat.
-- A `stack.yml` rögzíti az image-neveket, portokat, hálózatokat, replikaszámokat, erőforráskorlátokat és healthcheckeket.
+A `frontend/app.js` kezeli a felhasználói műveleteket, és HTTP-kéréseket küld a backend API-nak.
 
-### 5.4. A saját image-ek létrehozásának parancsai
+A `frontend/nginx.conf` konfigurálja az Nginx webszervert és az API-kérések továbbítását.
+
+### 5.3. Backend megvalósítása
+
+A `backend/app.py` tartalmazza a Flask API-végpontokat.
+
+A `backend/db.py` kezeli a PostgreSQL-adatbázishoz történő kapcsolódást.
+
+A `backend/init_db.py` az adatbázis tábláinak létrehozását és szükség szerinti bővítését végzi.
+
+Az adatbázisséma bővítése lehetővé teszi az új feladatmezők hozzáadását a korábban mentett feladatok megtartásával.
+
+### 5.4. Docker image-ek
+
+A backend saját Dockerfile alapján épül, `python:3.12-slim` alapimage használatával.
+
+A frontend `nginx:stable-alpine` alapimage-re épül.
+
+Az image-ek előállítása:
 
 ```bash
 sudo docker build -t flowdesk-backend:2.0 ./backend
 sudo docker build -t flowdesk-frontend:2.0 ./frontend
+```
+
+Az elkészült image-ek listázása:
+
+```bash
 sudo docker images
 ```
 
-A backend image `python:3.12-slim` alapra épül, feltelepíti a `requirements.txt` függőségeket, és Gunicornnal szolgálja ki a Flask API-t. A frontend image `nginx:stable-alpine` alapra épül, és bemásolja a statikus webes fájlokat, valamint az Nginx-konfigurációt.
+A rendszer két saját Docker image-et és egy hivatalos PostgreSQL image-et használ.
 
-**Ellenőrzés:** a `docker images` listában a `flowdesk-backend` és `flowdesk-frontend` image-eknél a `2.0` tag látható.
+---
 
-## 6. Telepítés nulláról – pontos parancsok
+## 6. Telepítés Docker Swarm alatt
 
-A parancsokat **Ubuntu/WSL terminálban, a projekt gyökérmappájában** kell kiadni. Feltételezzük, hogy a Docker Engine már működik.
-
-### 6.1. A forráskód beszerzése
-
-Új gépen, telepített Gittel:
+### 6.1. Forráskód letöltése
 
 ```bash
 git clone https://github.com/Fmate2003/flowdesk.git
 cd flowdesk
 ```
 
-Ha a projekt már helyileg megvan:
+A `git clone` a GitHubon tárolt forráskódot másolja a helyi környezetbe.
 
-```bash
-cd ~/flowdesk-v2/flowdesk-swarm
-```
+### 6.2. Docker Swarm
 
-### 6.2. A Swarm állapotának ellenőrzése
+A Swarm aktuális állapotának lekérdezése:
 
 ```bash
 sudo docker info --format '{{.Swarm.LocalNodeState}}'
 ```
 
-- Ha `active`: a Swarm már létezik, **ne futtasd újra a `swarm init` parancsot**.
-- Ha `inactive`: új telepítésnél indítsd el:
+Az `active` eredmény aktív Docker Swarm környezetet jelent.
+
+Új Docker-környezetben a Swarm inicializálása:
 
 ```bash
 sudo docker swarm init
 ```
 
-Ellenőrzés:
+A csomópontok ellenőrzése:
 
 ```bash
 sudo docker node ls
 ```
 
-Egynode-os demónál egy `Ready`, `Active`, `Leader` állapotú manager node-ot várunk.
+A projekt egy manager szerepkörű, egycsomópontos Docker Swarm-környezetben fut.
 
-### 6.3. Docker Secret létrehozása – csak első alkalommal
+A manager csomópont a szolgáltatások kívánt állapotát kezeli, és gondoskodik a feladatok ütemezéséről.
 
-```bash
-sudo docker secret ls
-```
+### 6.3. Docker Secret
 
-Ha még **nem** létezik `todo_db_password` nevű Secret:
+A PostgreSQL és a backend ugyanazt az adatbázis-jelszót használja.
+
+A jelszót a rendszer Docker Secret segítségével kezeli, így annak tényleges értéke nem szerepel a `stack.yml` fájlban.
+
+A Secret létrehozása az első telepítéskor:
 
 ```bash
 openssl rand -base64 32 | sudo docker secret create todo_db_password -
 ```
 
-Ellenőrzés:
+A létrehozott Secretek listázása:
 
 ```bash
 sudo docker secret ls
 ```
 
-**Miért szükséges?** A PostgreSQL és a backend ugyanazt a jelszót fájlon keresztül olvassa a Docker Secretből. A `stack.yml` a Secretet `external: true` megjelöléssel hivatkozza, tehát a stack nem hozza létre helyettünk.
+A `stack.yml` a `todo_db_password` Secretet külső erőforrásként hivatkozza.
 
-**Fontos:** már használt PostgreSQL Volume mellett **ne hozz létre másik jelszót ugyanazzal a céllal**, mert eltérő hitelesítési adatok kapcsolódhatnak a meglévő adatbázishoz. Ne írd ki a Secret értékét a terminálba vagy a GitHubra.
+**Adatbázis-hitelesítés:** meglévő PostgreSQL-adatkötet használatakor a hitelesítési adatoknak összhangban kell maradniuk az adatbázis eredeti konfigurációjával. A Secret tényleges értéke nem része a GitHubon közzétett forráskódnak.
 
-### 6.4. Image-ek felépítése
+### 6.4. Docker image-ek építése
 
 ```bash
 sudo docker build -t flowdesk-backend:2.0 ./backend
 sudo docker build -t flowdesk-frontend:2.0 ./frontend
-sudo docker images
 ```
 
-### 6.5. Stack telepítése
+A két image tartalmazza a frontend és a backend futtatásához szükséges alkalmazásfájlokat és függőségeket.
+
+### 6.5. Docker Stack telepítése
 
 ```bash
 sudo docker stack deploy --resolve-image never -c stack.yml todoapp
 ```
 
-A `todoapp` a **stack neve**, ezért a Swarm a szolgáltatásokat `todoapp_frontend`, `todoapp_backend`, `todoapp_database` néven hozza létre. A hálózatok neve `todoapp_webnet` és `todoapp_dbnet`; a tároló neve `todoapp_postgres_data`.
+A parancs a `stack.yml` konfigurációja alapján létrehozza a Docker Swarm-szolgáltatásokat és a hozzájuk tartozó hálózatokat.
 
-A `--resolve-image never` a helyben felépített image-ek használatához illeszkedik. **Ez az egynode-os demó azért működik, mert a build és a futtatás ugyanazon a Docker Engine-en történik.** Több Swarm node esetén az image-eket elérhető registrybe kellene feltölteni, hogy minden node le tudja tölteni őket.
+A `todoapp` a stack neve.
+
+A `--resolve-image never` beállítás a helyben létrehozott image-ekkel működő, egycsomópontos környezethez illeszkedik.
 
 ### 6.6. Szolgáltatások ellenőrzése
 
 ```bash
 sudo docker service ls
-sudo docker stack services todoapp
-sudo docker service ps todoapp_backend
-sudo docker service ps todoapp_database
-sudo docker service ps todoapp_frontend
 ```
 
-Elvárt állapot:
+A működő rendszer szolgáltatásai:
 
-```text
-NAME               MODE         REPLICAS   IMAGE
- todoapp_backend    replicated   3/3        flowdesk-backend:2.0
- todoapp_database   replicated   1/1        postgres:16-alpine
- todoapp_frontend   replicated   1/1        flowdesk-frontend:2.0
-```
+| Szolgáltatás | Image | Példányszám |
+|---|---|---|
+| `todoapp_frontend` | `flowdesk-frontend:2.0` | 1/1 |
+| `todoapp_backend` | `flowdesk-backend:2.0` | 3/3 |
+| `todoapp_database` | `postgres:16-alpine` | 1/1 |
 
-A frontendnél a `*:8080->80/tcp` portleképezést is látni kell. Indítás közben átmenetileg `0/1`, `1/3` vagy `Starting` szerepelhet; újra ellenőrizni kell.
+A `REPLICAS` oszlop a futó és az előírt példányok számát mutatja.
 
-### 6.7. Alkalmazás megnyitása
+### 6.7. Alkalmazás elérése
 
-```text
+A frontend a 8080-as porton érhető el:
+
 http://127.0.0.1:8080
-```
 
-A felületen a Flowdesk munkaterület, a feladatlista, az új feladat gomb és a rendszerállapot-jelzés jelenik meg.
+A webes felületen elérhetők a feladatkezelési funkciók és az áttekintő statisztikák.
 
-## 7. Működési ellenőrzés és API-tesztek
+---
 
-### 7.1. Frontend HTTP-válasz
+## 7. API és alkalmazásműködés
+
+A Flowdesk REST API-t használ a frontend és a backend közötti kommunikációhoz.
+
+### 7.1. API-végpontok
+
+| HTTP-metódus | Végpont | Funkció |
+|---|---|---|
+| GET | `/api/health` | Alkalmazás és adatbázis állapotának lekérdezése |
+| GET | `/api/tasks` | Feladatok listázása |
+| POST | `/api/tasks` | Új feladat létrehozása |
+| PATCH | `/api/tasks/{id}` | Feladat módosítása |
+| DELETE | `/api/tasks/{id}` | Feladat törlése |
+
+### 7.2. API állapotának ellenőrzése
 
 ```bash
-curl --noproxy '*' -I --connect-timeout 3 --max-time 8 http://127.0.0.1:8080/
+curl -i --max-time 10 http://127.0.0.1:8080/api/health
 ```
 
-Elvárt: **`HTTP/1.1 200 OK`** vagy más sikeres `200` státuszkód. A HTML letöltésének ellenőrzése:
+Sikeres működés esetén az alkalmazás HTTP 200-as választ ad.
 
-```bash
-curl --noproxy '*' http://127.0.0.1:8080/
-```
-
-### 7.2. Backend és adatbázis egészsége
-
-```bash
-curl -sS http://127.0.0.1:8080/api/health
-```
-
-Elvárt JSON-válasz:
+A válasz törzse:
 
 ```json
-{"database":"ok","status":"ok"}
+{
+  "database": "ok",
+  "status": "ok"
+}
 ```
 
-Ez azt ellenőrzi, hogy a frontend útvonalán keresztül az API elérhető, a Flask backend pedig végre tud hajtani egy `SELECT 1` lekérdezést a PostgreSQL-ben.
+A `database: ok` érték azt mutatja, hogy a backend kapcsolatot tud létesíteni a PostgreSQL-adatbázissal.
 
-### 7.3. Feladatlista
+### 7.3. Feladatok lekérdezése
 
 ```bash
-curl -sS http://127.0.0.1:8080/api/tasks
+curl -s --max-time 10 http://127.0.0.1:8080/api/tasks
 ```
 
-Elvárt: JSON-válasz egy `tasks` tömbbel és egy `instance` mezővel. Ha nincsenek feladatok, a lista üres lehet.
+A backend JSON-formátumban visszaadja az adatbázisban tárolt feladatokat.
 
-### 7.4. Feladat létrehozása és módosítása
+A válasz tartalmazhatja a feladat azonosítóját, nevét, leírását, kategóriáját, prioritását, határidejét és állapotát.
+
+### 7.4. Új feladat létrehozása
 
 ```bash
 curl -sS -X POST http://127.0.0.1:8080/api/tasks \
   -H 'Content-Type: application/json' \
-  -d '{"title":"README tesztfeladat","description":"API teszt","category":"study","priority":"high","due_date":"2026-11-21"}'
+  -d '{"title":"API tesztfeladat","description":"Feladat létrehozása","category":"study","priority":"high"}'
 ```
 
-A válaszban keresd a létrehozott feladat **`id`** értékét. Az alábbi `42` csak példa; helyettesítsd a tényleges ID-val:
+A POST kérés új rekordot hoz létre a PostgreSQL-adatbázisban.
+
+### 7.5. Feladat módosítása
 
 ```bash
 curl -sS -X PATCH http://127.0.0.1:8080/api/tasks/42 \
@@ -388,441 +469,475 @@ curl -sS -X PATCH http://127.0.0.1:8080/api/tasks/42 \
   -d '{"completed":true}'
 ```
 
-Törlés, ha már nincs szükség a tesztfeladatra:
+A `42` példaazonosító. A módosítási végpont a megadott azonosítóval rendelkező feladat adatait frissíti.
+
+### 7.6. Feladat törlése
 
 ```bash
 curl -sS -X DELETE http://127.0.0.1:8080/api/tasks/42
 ```
 
-**Egyszerűbb alternatíva:** a `scripts/smoke_test.py` létrehoz egy külön próba-feladatot, ellenőrzi a CRUD-műveleteket, majd törli a saját próba-feladatát (lásd 11. fejezet).
+A DELETE kérés eltávolítja a megadott azonosítójú feladatot.
 
-## 8. Feladatkövetelmények és igazoló parancsok
+---
 
-Az alábbi ellenőrző mátrix a projektben megvalósított fő, bemutatandó követelményekhez készült. **A hivatalos pontozási lap részletes alszempontjait külön össze kell vetni az oktató által kiadott feladatleírással**, mert ez a README nem helyettesíti a hivatalos értékelési dokumentumot.
+## 8. Docker Swarm konfiguráció ellenőrzése
 
-| Követelmény | Megvalósítás | Ellenőrző parancs / bizonyíték | Elvárt eredmény |
-|---|---|---|---|
-| Legalább 3 együttműködő szolgáltatás | Nginx, Flask, PostgreSQL | `sudo docker service ls` | 3 szolgáltatás, `1/1`, `3/3`, `1/1` |
-| Saját Dockerfile-ok | `backend/Dockerfile`, `frontend/Dockerfile` | `ls backend/Dockerfile frontend/Dockerfile` | Mindkét fájl létezik |
-| Saját Docker image-ek | `flowdesk-frontend:2.0`, `flowdesk-backend:2.0` | `sudo docker images` | Mindkét image szerepel |
-| Docker Swarm használata | Aktív Swarm manager | `sudo docker info --format '{{.Swarm.LocalNodeState}}'` | `active` |
-| Stack-alapú telepítés | `stack.yml` és `todoapp` stack | `sudo docker stack services todoapp` | 3 Swarm service |
-| Overlay hálózat | `webnet`, `dbnet` | `sudo docker network ls` | `todoapp_webnet`, `todoapp_dbnet` |
-| Overlay driver ellenőrzése | Mindkettő overlay | `sudo docker network inspect todoapp_webnet --format '{{.Driver}}'` | `overlay` |
-| Tartós adatbázis-volume | `postgres_data` | `sudo docker volume inspect todoapp_postgres_data` | Meglévő volume metadata |
-| Jelszó Secretben | `todo_db_password` | `sudo docker secret ls` | A Secret neve szerepel, az értéke nem |
-| Backend replikáció | 3 alapértelmezett replika | `sudo docker service ps todoapp_backend` | 3 aktív Running task |
-| Dinamikus skálázás | 3 → 5 → 3 | `sudo docker service scale todoapp_backend=5` | `5/5` a service listában |
-| Automatikus helyreállítás | Swarm task reconciliation | Konténer leállítása után `sudo docker service ps todoapp_database` | Új task indul, majd `1/1` |
-| Adatmegőrzés újraindítás után | PostgreSQL named volume | Feladat létrehozása → adatbázis task cseréje → oldal frissítése | A feladat továbbra is látható |
-| Backend–adatbázis kapcsolat | Flask `/api/health` | `curl -sS http://127.0.0.1:8080/api/health` | `status: ok`, `database: ok` |
-| Nyilvános HTTPS-elérés | Cloudflare Tunnel | Nyilvános URL másik eszközön | A Flowdesk megnyílik és menteni tud |
-| Forráskód és leírás | GitHub README és kód | https://github.com/Fmate2003/flowdesk | A fájlok böngészőből elérhetők |
-| Dokumentált tesztelés | Egység- és API-tesztek | `python3 -m pytest -q`; `python3 scripts/smoke_test.py` | A tesztek sikeresek |
-
-### 8.1. Konkrét Swarm/stack információk
+### 8.1. Docker Swarm állapota
 
 ```bash
 sudo docker node ls
-sudo docker stack ls
-sudo docker stack services todoapp
-sudo docker service ls
-sudo docker service ps todoapp_backend
 ```
 
-**Mit magyarázzunk a bemutatón?** A `stack.yml` meghatározza a kívánt állapotot (*desired state*), a Swarm pedig folyamatosan ehhez igazítja a futó feladatokat.
+A parancs megjeleníti a Docker Swarm-csomópontokat.
 
-### 8.2. Overlay hálózatok részletes vizsgálata
+A projekt egy manager csomópontot használ, amely `Ready` állapotban működik.
+
+### 8.2. Szolgáltatások
+
+```bash
+sudo docker service ls
+```
+
+A parancs megjeleníti a Swarm által kezelt frontend, backend és adatbázis-szolgáltatásokat.
+
+### 8.3. Saját Docker image-ek
+
+```bash
+sudo docker images
+```
+
+A kimenetben szerepel a `flowdesk-backend:2.0` és a `flowdesk-frontend:2.0` image.
+
+### 8.4. Overlay hálózatok
 
 ```bash
 sudo docker network ls
-sudo docker network inspect todoapp_webnet --format '{{.Name}} / {{.Driver}}'
-sudo docker network inspect todoapp_dbnet --format '{{.Name}} / {{.Driver}}'
 ```
 
-Elvárt: a hálózatok `overlay` drivert használnak. A frontend a `webnet` hálózathoz kapcsolódik, az adatbázis kizárólag a `dbnet` hálózathoz, a backend mindkettőhöz.
+A Flowdesk két overlay hálózata:
 
-### 8.3. Persistent Volume és Secret ellenőrzése
+- `todoapp_webnet`
+- `todoapp_dbnet`
+
+A hálózati driver ellenőrzése:
+
+```bash
+sudo docker network inspect todoapp_webnet --format '{{.Driver}}'
+sudo docker network inspect todoapp_dbnet --format '{{.Driver}}'
+```
+
+Mindkét hálózat `overlay` drivert használ.
+
+### 8.5. Docker Volume
 
 ```bash
 sudo docker volume ls
-sudo docker volume inspect todoapp_postgres_data
+```
+
+A PostgreSQL tartós adattárolója:
+
+`todoapp_postgres_data`
+
+A szolgáltatáshoz tartozó csatolás lekérdezése:
+
+```bash
+sudo docker service inspect todoapp_database --format '{{json .Spec.TaskTemplate.ContainerSpec.Mounts}}'
+```
+
+A PostgreSQL az adatokat a `/var/lib/postgresql/data` könyvtárban tárolja, amelyhez a Docker Volume csatlakozik.
+
+### 8.6. Docker Secret
+
+```bash
 sudo docker secret ls
 ```
 
-**Fontos:** a Volume megléte önmagában nem bizonyítja az adatmegőrzést; ehhez a 9.3. fejezetben leírt gyakorlati teszt szükséges. A Secret **értékét nem mutatjuk meg**.
+A szolgáltatások a `todo_db_password` nevű Docker Secretet használják.
 
-## 9. Részletes demonstráció: skálázás, önjavítás, adatmegőrzés
+A Secret elkülöníti a bizalmas hitelesítési adatot a forráskódtól és a Docker Stack konfigurációjától.
 
-### 9.1. Dinamikus skálázás: 3 → 5 → 3
+---
 
-**Előfeltétel:** mindhárom szolgáltatás működik; a backend `3/3` állapotú.
+## 9. Skálázás és automatikus helyreállítás
+
+### 9.1. Backend skálázása
+
+A Docker Swarm lehetővé teszi a backend példányszámának dinamikus módosítását.
+
+A backend alapértelmezett példányszáma három.
+
+A szolgáltatás öt példányra történő skálázása:
 
 ```bash
-sudo docker service ls
 sudo docker service scale todoapp_backend=5
+```
+
+Az állapot ellenőrzése:
+
+```bash
 sudo docker service ls
 sudo docker service ps todoapp_backend
 ```
 
-**Elvárt:** a backend `5/5`, a listában az `.1` … `.5` példányok futnak. Az új példányok a meglévők mellé indulnak. A böngészős alkalmazás továbbra is elérhető ugyanazon a `:8080` porton.
+A Swarm két új backendkonténert indít a meglévő három mellé.
 
-Visszaállítás az eredeti konfigurációra:
+A sikeres skálázás eredménye `5/5` futó backendpéldány.
+
+### 9.2. Visszaskálázás
 
 ```bash
 sudo docker service scale todoapp_backend=3
 sudo docker service ls
 ```
 
-**Elvárt:** `todoapp_backend` ismét `3/3`.
+A Swarm leállítja a két további backendpéldányt.
 
-> Figyelem: a `service scale` a **futó állapotot** változtatja meg; a `stack.yml` továbbra is `replicas: 3` értéket tartalmaz. Egy későbbi újratelepítésnél ez a deklarált kiinduló állapot.
+A szolgáltatás ismét az alapértelmezett `3/3` állapotban működik.
 
-### 9.2. Automatikus konténer-helyreállítás (self-healing)
+A skálázás során a frontend és az adatbázis konfigurációja változatlan marad.
 
-**Biztonságos demonstrációs környezet:** saját tesztalkalmazás; az adatbázis rövid időre elérhetetlenné válhat. Nem éles üzleti rendszeren végezzük.
+### 9.3. Automatikus helyreállítás
 
-Először azonosítjuk a ténylegesen futó adatbázis-konténert:
+A Docker Swarm folyamatosan figyeli a szolgáltatások tényleges és elvárt példányszámát.
+
+A backendkonténerek listázása:
 
 ```bash
-sudo docker ps --filter 'name=todoapp_database'
+sudo docker ps --filter "label=com.docker.swarm.service.name=todoapp_backend"
 ```
 
-Az egyszerű, pontos konténerazonosító-kiolvasás:
+Egy backendkonténer szándékos leállítása az aktuális konténerazonosító alapján:
 
 ```bash
-DB_CONTAINER=$(sudo docker ps --filter 'name=todoapp_database' --format '{{.ID}}' | head -n 1)
-echo "$DB_CONTAINER"
+sudo docker kill KONTAINER_AZONOSITO
 ```
 
-Ha van azonosító, szándékosan megszakítjuk a konténert:
+A konténer kiesése után a Docker Swarm automatikusan új példányt indít.
+
+A helyreállítás ellenőrzése:
 
 ```bash
-test -n "$DB_CONTAINER" && sudo docker kill "$DB_CONTAINER"
-```
-
-Ellenőrzés:
-
-```bash
-sudo docker service ps todoapp_database
+sudo docker service ps todoapp_backend
 sudo docker service ls
 ```
 
-**Elvárt:** a régi task `Failed` / `Shutdown` állapotba kerül (a `docker kill` miatt például `exit 137`), a Swarm új taskot indít; végül az adatbázis ismét `1/1` állapotú lesz. A `CURRENT STATE` kezdetben `Starting` lehet.
+A korábbi feladat `Failed` állapotban jelenhet meg, míg az új feladat `Running` állapotba kerül.
 
-**Mit igazol?** A Swarm a konténer kiesését észlelve pótolja a kívánt egy adatbázispéldányt. **Nem** bizonyít teljes gép- vagy többnode-os hibatűrést.
+A backend szolgáltatás ismét `3/3` példányszámmal működik.
 
-### 9.3. Tartós adatmegőrzés tesztje
+A rendszerben ezt a működést tényleges konténerleállítással ellenőriztük.
 
-Ezt a tesztet célszerű a 9.2. lépéssel egy menetben végrehajtani.
+### 9.4. Tartós adattárolás
 
-1. A böngészőben (`http://127.0.0.1:8080`) hozzunk létre egy `Adatmegőrzési teszt` nevű feladatot.
-2. Frissítsük az oldalt (**F5**) és ellenőrizzük, hogy a feladat megvan.
-3. Hajtsuk végre a 9.2. fejezetben szereplő adatbázis-konténer leállítását.
-4. Várjuk meg, amíg `sudo docker service ls` szerint az adatbázis újra `1/1`.
-5. Frissítsük az oldalt, és ellenőrizzük, hogy az **Adatmegőrzési teszt** feladat továbbra is látható.
+A PostgreSQL az adatokat a `todoapp_postgres_data` Docker Volume-ban tárolja.
 
-**Elvárt:** az adat nem vész el, mivel a PostgreSQL fájljai a `todoapp_postgres_data` Docker Volume-ban vannak, nem a megszüntetett konténer ideiglenes rétegében.
+Az adatbázis-konténer cseréje során a Swarm új konténert indít, amely ugyanazt a tartós adatkötetet használja.
 
-A projektben ezt a működést ténylegesen kipróbáltuk: a PostgreSQL-konténer pótlása után a korábban mentett feladat megmaradt. A teljes WSL-/számítógép-leállítás után újratelepített stacket is ellenőriztük, és a korábbi feladatok továbbra is elérhetők voltak.
+Az adatmegőrzést korábban létrehozott feladatokkal ellenőriztük.
 
-### 9.4. Kapcsolódó naplók és diagnosztika
+A PostgreSQL-konténer leállítása és automatikus pótlása után a mentett feladatok továbbra is elérhetők maradtak.
+
+A teljes WSL-környezet és a számítógép újraindítása után is megmaradtak az adatbázisban tárolt rekordok.
+
+### 9.5. Naplók
 
 ```bash
 sudo docker service logs --tail 50 todoapp_frontend
 sudo docker service logs --tail 50 todoapp_backend
 sudo docker service logs --tail 50 todoapp_database
-sudo docker service ps todoapp_backend --no-trunc
 ```
 
-A naplók segítségével ellenőrizhető a frontend indulása, a backend adatbázis-kapcsolódása és az adatbázis inicializálása. Indulási sorrendtől függően átmeneti kapcsolatfelvételi hibák előfordulhatnak; a végső service-állapotot és HTTP-választ is ellenőrizni kell.
+A szolgáltatásnaplók az alkalmazás indulásáról, működéséről és az esetleges hibákról tartalmaznak információkat.
 
-## 10. Nyilvános HTTPS-elérés Cloudflare Tunnel segítségével
+---
 
-### 10.1. Miért szükséges a tunnel?
+## 10. Nyilvános HTTPS-elérés
 
-A `127.0.0.1:8080` a helyi gépen használható. A Cloudflare Tunnel egy kimenő kapcsolatot épít ki, amelyen keresztül egy külső, HTTPS-es `trycloudflare.com` címről lehet elérni a helyi szolgáltatást, router-porttovábbítás nélkül.
+A Flowdesk alapértelmezetten helyi hálózati címen működik.
 
-### 10.2. `cloudflared` telepítése Ubuntu/WSL alatt
+A Cloudflare Tunnel lehetővé teszi az alkalmazás internetes elérését a helyi Docker Swarm-környezetből.
 
-A projektben a hivatalos kiadásból származó 64 bites Debian-csomagot használtuk:
+### 10.1. Cloudflared telepítése
+
+Ubuntu alatt a hivatalos Debian-csomag használható:
 
 ```bash
 curl -fL --output /tmp/cloudflared.deb \
   https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+
 sudo apt install -y /tmp/cloudflared.deb
+```
+
+A telepített verzió ellenőrzése:
+
+```bash
 cloudflared --version
 ```
 
-Az `amd64` csomag Intel/AMD x86-64 géphez való; ARM64 rendszeren a megfelelő másik kiadást kell választani.
-
-### 10.3. Tunnel indítása
-
-A Flowdesk szolgáltatások működése mellett **egy külön VS Code Ubuntu terminálban**:
+### 10.2. Tunnel indítása
 
 ```bash
 cloudflared tunnel --url http://127.0.0.1:8080
 ```
 
-A terminál kiír egy véletlenszerű címet, például:
+A Cloudflare Tunnel egy kimenő kapcsolatot hoz létre a helyi alkalmazás és a Cloudflare hálózata között.
+
+A program egy ideiglenes HTTPS-címet generál:
 
 ```text
-https://pelda-veletlen-nev.trycloudflare.com
+https://veletlenszeru-nev.trycloudflare.com
 ```
 
-**A tényleges címet a terminálból kell kimásolni; egy korábbi tunnel címe újraindítás után nem feltétlenül működik.** A tunnel futása alatt a parancs nem tér vissza a promptba, ez normális. Leállítás: `Ctrl+C`.
+A nyilvános cím a helyi `127.0.0.1:8080` címre továbbítja a webes kéréseket.
 
-### 10.4. Ellenőrzés külső eszközről
+A Flowdesk nyilvános elérését másik eszközről is ellenőriztük. A feladatok létrehozása és visszaolvasása külső hálózatról is működött.
 
-1. Nyissuk meg az aktuális HTTPS-címet egy másik telefonról vagy számítógépről.
-2. Hozzunk létre egy tesztfeladatot.
-3. Frissítsük az oldalt.
-4. Ellenőrizzük, hogy a feladat megmaradt.
+A TryCloudflare Quick Tunnel ideiglenes elérést biztosít, nem állandó alkalmazáshosztingot. A szolgáltatás csak a helyi alkalmazás és a tunnel működése alatt érhető el.
 
-A projekt során ez a teszt másik személy eszközéről is sikeresen lefutott. A tunnel önmagában nem garantál 24 órás rendelkezésre állást: ha a számítógép, a Docker vagy a `cloudflared` leáll, a link nem működik. A TryCloudflare Quick Tunnel **nem produkciós hoszting**.
+---
 
-## 11. Automatizált tesztek
+## 11. Automatizált tesztelés
 
-### 11.1. Python-függőségek és unit/konfigurációs tesztek
+A projekt Python-alapú automatizált teszteket is tartalmaz.
 
-A projekt gyökerében:
+### 11.1. Tesztkörnyezet
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -r dev-requirements.txt
+```
+
+A virtuális Python-környezet elkülöníti a teszteléshez szükséges függőségeket a rendszer többi Python-csomagjától.
+
+### 11.2. Egység- és konfigurációs tesztek
+
+```bash
 python3 -m pytest -q
 ```
 
-A `tests/test_structure.py` ellenőrzi a szolgáltatások számát, a hálózatokat, a Volume/Secret deklarációját, a replika- és restartbeállításokat, a saját image-eket és a publikált HTTP-portot. A `tests/test_api.py` a Flask-végpontok létrehozás/olvasás/módosítás/törlés viselkedését teszteli szimulált adatbáziskapcsolattal; ehhez nem szükséges futó PostgreSQL.
+A `tests/test_api.py` a backend API működését ellenőrzi.
 
-**Sikeres eredmény:** a `pytest` `passed` eredménnyel zár, és 0-s kilépési kódot ad. A tesztek teljesítését a saját gépen kell megerősíteni; a README nem állítja, hogy minden környezetben automatikusan sikeresek.
+A `tests/test_structure.py` a Docker Swarm-konfiguráció egyes elemeit vizsgálja, például a szolgáltatásokat, hálózatokat, replikákat és adattárolási beállításokat.
 
-### 11.2. Végponttól végpontig tartó API-gyorsteszt
+### 11.3. API-gyorsteszt
 
-Futó Docker Swarm alkalmazás mellett:
+Futó alkalmazás mellett:
 
 ```bash
 python3 scripts/smoke_test.py
 ```
 
-A script sorban ellenőrzi:
+A gyorsteszt az alkalmazás fő API-műveleteit ellenőrzi:
 
-1. `GET /api/health` – API és adatbázis válasza;
-2. `POST /api/tasks` – tesztfeladat létrehozása;
-3. `GET /api/tasks` – visszaolvasás;
-4. `PATCH /api/tasks/{id}` – készre állítás;
-5. `DELETE /api/tasks/{id}` – tesztfeladat törlése.
+1. Alkalmazás- és adatbázis-kapcsolat.
+2. Feladat létrehozása.
+3. Feladat visszaolvasása.
+4. Feladat módosítása.
+5. Tesztfeladat törlése.
 
-Elvárt: minden ellenőrzés `OK`, a végén `SIKER`. A script csak a saját maga által létrehozott próbafeladatot törli. Ha az ellenőrzés közben váratlan hiba történik, előfordulhat, hogy manuális takarítás szükséges.
+A teszt a saját maga által létrehozott próbaadatokat használja.
 
-Nyilvános végponthoz is használható az **aktuális**, működő tunnelcímmel:
+---
 
-```bash
-BASE_URL=https://pelda-veletlen-nev.trycloudflare.com python3 scripts/smoke_test.py
-```
+## 12. Leállítás és újraindítás
 
-## 12. Leállítás, újraindítás, adatok megőrzése
+### 12.1. Alkalmazás leállítása
 
-### 12.1. Szabályos leállítás
+A Cloudflare Tunnel a futó terminálban `Ctrl + C` billentyűkombinációval állítható le.
 
-1. Cloudflare Tunnel terminál: `Ctrl+C`.
-2. Ubuntu terminálban a Flowdesk stack eltávolítása:
+A Docker Swarm stack eltávolítása:
 
 ```bash
 sudo docker stack rm todoapp
+```
+
+A szolgáltatások ellenőrzése:
+
+```bash
 sudo docker service ls
 ```
 
-Várjuk meg, hogy a Flowdesk-szolgáltatások eltűnjenek a listából.
+A `docker stack rm` eltávolítja a stack szolgáltatásait és hálózatait.
 
-3. Docker Engine és socket leállítása:
+A parancs nem törli automatikusan a PostgreSQL tartós Docker Volume-ot vagy a helyi Docker image-eket.
+
+### 12.2. Docker Engine leállítása
 
 ```bash
 sudo systemctl stop docker docker.socket
+```
+
+A Docker állapotának ellenőrzése:
+
+```bash
 systemctl is-active docker
 ```
 
-Elvárt: `inactive`.
+A leállított szolgáltatás állapota `inactive`.
 
-4. VS Code / Ubuntu terminálok bezárása; szükség esetén **Windows PowerShellben**:
+A WSL-környezet Windows PowerShellből leállítható:
 
 ```powershell
 wsl --shutdown
 ```
 
-**Lényeg:** a `docker stack rm todoapp` eltávolítja a Swarm-szolgáltatásokat és a stackhálózatokat, de **nem törli automatikusan** a meglévő `todoapp_postgres_data` named Volume-ot, a lokális image-eket és a forráskódot.
-
-### 12.2. Másnapi újraindítás
-
-Ubuntu terminálban:
+### 12.3. Alkalmazás újraindítása
 
 ```bash
 cd ~/flowdesk-v2/flowdesk-swarm
+
 sudo systemctl start docker
-systemctl is-active docker
+
 sudo docker info --format '{{.Swarm.LocalNodeState}}'
+
 sudo docker stack deploy --resolve-image never -c stack.yml todoapp
+
 sudo docker service ls
 ```
 
-Elvárt: `active` Docker Engine, `active` Swarm, backend `3/3`, frontend `1/1`, adatbázis `1/1`. Ezután `http://127.0.0.1:8080` megnyitása és a korábbi feladatok ellenőrzése. Ha nyilvános elérés kell, külön újraindítandó a Cloudflare Tunnel.
+A korábban létrehozott Docker image-ek, Docker Secret és PostgreSQL Volume újra felhasználhatók.
 
-### 12.3. Amit adatmegőrzéshez tilos véletlenül végrehajtani
+A Docker Swarm újra létrehozza a stack szolgáltatásait.
 
-```text
-NE töröld a todoapp_postgres_data volume-ot!
-NE futtass docker volume prune parancsot, ha fontosak a mentett adatok!
-NE futtass docker system prune --volumes parancsot!
-NE használd a wsl --unregister Ubuntu parancsot!
-NE állítsd alaphelyzetbe az Ubuntu alkalmazást!
-```
+A PostgreSQL a meglévő adatkötetet használja, így a mentett feladatok az alkalmazás újraindítása után is elérhetők maradnak.
 
-A Docker Volume nem helyettesíti a külön adatbázis- vagy WSL-biztonsági mentést. Éles adatokhoz rendszeres mentési stratégia szükséges.
+### 12.4. Adatmegőrzés
 
-## 13. Git és GitHub – forráskód publikálása
+A `todoapp_postgres_data` Docker Volume az alkalmazás tartós adatait tárolja.
 
-A projekt forráskódját a GitHubon publikáltuk, így a konfigurációk és az alkalmazáskód ellenőrizhetők.
+Az adatmegőrzés szempontjából a Volume és a WSL virtuális lemezének megőrzése meghatározó.
 
-### 13.1. Első helyi Git-mentés és összekapcsolás
+A `docker volume rm`, a `docker system prune --volumes` és a WSL-disztribúció eltávolítása adatvesztést okozhat.
 
-A projekt gyökérmappájában:
+A Docker Volume nem helyettesíti a külön biztonsági mentést.
+
+---
+
+## 13. Verziókövetés GitHubon
+
+A Flowdesk forráskódja Git verziókövetéssel készült, és nyilvános GitHub-repozitóriumban található.
+
+**Repository:**
+
+https://github.com/Fmate2003/flowdesk
+
+A repozitórium tartalmazza a frontend és backend forráskódját, a Dockerfile-okat, a Docker Swarm-konfigurációt, a teszteket és a dokumentációt.
+
+### 13.1. Git-repozitórium
+
+A helyi Git-repozitórium inicializálása:
 
 ```bash
 git init
 git branch -M main
+```
+
+A GitHub-repozitórium összekapcsolása:
+
+```bash
 git remote add origin https://github.com/Fmate2003/flowdesk.git
-git status --short
 ```
 
-Az első feltöltés előtt ellenőrizzük a `.gitignore` tartalmát és a feltöltendő fájlokat:
+### 13.2. Verziómentés
 
 ```bash
-cat .gitignore
 git add .
-git diff --cached --name-only
-git grep --cached -n -i -E 'password|secret|token|api_key|private.key'
+git commit -m "Initial release of Flowdesk 2.0"
 ```
 
-A keresés **csak segítség**, nem teljes titokvizsgálat. A `DB_PASSWORD_FILE` és a `todo_db_password` változónevek önmagukban nem valódi jelszavak. Valódi titkos értékeket nem szabad commitolni.
+A commit egy adott állapotban rögzíti a projekt forrásfájljait.
 
-### 13.2. Első commit és push
-
-A Git szerzői adatait a felhasználónak saját fiókjához kell beállítania. A GitHub privát `noreply` e-mail-címe használható, ha nem szeretnénk nyilvános személyes címet:
+### 13.3. Feltöltés GitHubra
 
 ```bash
-git config --global user.name "Fmate2003"
-git config --global user.email "SAJAT_GITHUB_NOREPLY_CIM"
-git commit -m "Initial release of Flowdesk 2.0"
 git push -u origin main
 ```
 
-A `SAJAT_GITHUB_NOREPLY_CIM` **helyőrző**, tényleges GitHub-fiókhoz tartozó címre kell cserélni. A `git push` hitelesítést kérhet. Sikeres feltöltéskor a `main -> main` kapcsolat megjelenik.
+A parancs a helyi `main` ág commitjait feltölti a távoli GitHub-repozitóriumba.
 
-### 13.3. A README frissítése a GitHubon
+A további módosítások ugyanebben a verziókövetési rendszerben kezelhetők.
 
-Ha most ezt a részletes README-t másolod be a projekt `README.md` fájljába, a következőket kell futtatni:
-
-```bash
-git status
-git add README.md
-git commit -m "Add detailed architecture and Docker Swarm verification guide"
-git push
-```
-
-Ez frissíti a GitHubon az automatikusan megjelenített README-t. A meglévő repositoryt **nem kell újra létrehozni**.
+---
 
 ## 14. Hibaelhárítás
 
-| Jelenség | Lehetséges ok | Vizsgálat / megoldás |
+| Jelenség | Lehetséges ok | Ellenőrzés |
 |---|---|---|
-| `Cannot connect to the Docker daemon` | Docker Engine nem fut | `sudo systemctl start docker`; `systemctl is-active docker` |
-| Swarm állapota `inactive` | Swarm nincs inicializálva | `sudo docker info --format '{{.Swarm.LocalNodeState}}'`; új telepítésnél `sudo docker swarm init` |
-| `secret not found` | Nincs külső Docker Secret | `sudo docker secret ls`; első telepítésnél hozd létre |
-| Szolgáltatás `0/1` vagy `1/3` | Indulás / crash / hiányzó image | `sudo docker service ps <service>`; `sudo docker service logs --tail 50 <service>` |
-| `localhost:8080` nem tölt be | Böngésző/WSL/Swarm ingress gond | `curl --noproxy '*' -v --connect-timeout 3 --max-time 8 http://127.0.0.1:8080/` |
-| Nginx `host not found in upstream` | Backend még nem volt elérhető induláskor | `sudo docker service ls`; `sudo docker service logs todoapp_frontend`; ellenőrizd, elindult-e később |
-| `/api/health` hibát jelez | Backend / PostgreSQL / Secret hiba | `sudo docker service logs --tail 50 todoapp_backend`; `...database` |
-| A feladatok eltűntek | Másik / új / törölt Volume | `sudo docker volume inspect todoapp_postgres_data`; ne törölj Volume-ot |
-| `cloudflared: command not found` | Tunnel program nincs telepítve | 10.2. fejezetben szereplő `.deb` telepítés |
-| Régi TryCloudflare-link nem él | A tunnel leállt vagy változott az URL | Indíts új tunnelt, használd az új címet |
-| Git `Author identity unknown` | Hiányzik a Git szerzői neve/e-mailje | `git config --global user.name ...`; `user.email ...` |
-| Git `Authentication failed` | Nincs érvényes GitHub-hitelesítés | GitHub böngészős bejelentkezés vagy támogatott credential manager; tokent ne oszd meg |
+| Docker Engine nem érhető el | Docker nem fut | `systemctl is-active docker` |
+| Swarm inaktív | Nincs aktív Swarm | `sudo docker info` |
+| Szolgáltatás nem indul | Konténerhiba vagy hiányzó image | `sudo docker service ps` |
+| Backend nem érhető el | Hálózati vagy alkalmazáshiba | `sudo docker service logs` |
+| Adatbázis-kapcsolati hiba | PostgreSQL vagy Secret probléma | `curl /api/health`, szolgáltatásnaplók |
+| Frontend nem tölt be | Port vagy Nginx probléma | `curl http://127.0.0.1:8080` |
+| Cloudflare-link nem működik | A tunnel leállt | Cloudflared naplóinak ellenőrzése |
+| GitHub-feltöltés sikertelen | Hitelesítési vagy kapcsolati probléma | `git remote -v`, `git status` |
 
-A Swarm hibakeresésénél mindig külön ellenőrizzük a **szolgáltatás replikaszámát**, a **taskok állapotát**, a **HTTP-választ** és az **alkalmazásadatok meglétét**. A `3/3` vagy `1/1` önmagában még nem helyettesíti az üzleti funkció tesztelését.
+A Docker Swarm hibakeresésénél a szolgáltatások példányszáma, a konténerek állapota, a szolgáltatásnaplók és az API-válaszok együttesen adnak képet a rendszer működéséről.
 
-## 15. Biztonság, korlátok és továbbfejlesztési lehetőségek
+---
 
-### 15.1. Biztonsági megoldások
+## 15. Biztonság és továbbfejlesztés
+
+### 15.1. Megvalósított biztonsági megoldások
 
 - Az adatbázis nincs közvetlenül publikálva az internetre.
-- Az adatbázis-jelszó Docker Secretből kerül a konténerekbe, nem a `stack.yml` fájlban szerepel.
-- A `.gitignore` kizárja az általánosan használt helyi `.env`, `secrets/`, kulcs- és naplófájlokat.
-- A backend bemeneti validációval ellenőrzi a mezőket; az adatbázis-hozzáférés paraméterezett SQL-lekérdezéseket használ.
-- A külső Quick Tunnel HTTPS-kapcsolatot ad a nyilvános kliensoldali eléréshez.
+- A PostgreSQL és a backend elkülönített belső hálózaton kommunikál.
+- Az adatbázis-jelszó Docker Secret segítségével kerül a konténerekhez.
+- A `.gitignore` kizárja a helyi konfigurációs és bizalmas fájlok meghatározott típusait.
+- A backend ellenőrzi a beérkező adatokat.
+- A külső elérés HTTPS-kapcsolaton keresztül történik.
 
 ### 15.2. Jelenlegi korlátok
 
-- **Nincs bejelentkezés és felhasználónkénti jogosultságkezelés.** A publikus link ismerői ugyanazt a közös feladatlistát érhetik el és módosíthatják.
-- A TryCloudflare nem állandó tárhely és nem garantál folyamatos rendelkezésre állást.
-- Egynode-os Swarmot használtunk, nincs külön manager/worker géppark.
-- A PostgreSQL helyi volume-ja nem automatikus, többgépes adatbázis-replikáció.
-- A replikák ugyanazon a hoston futnak, ezért a teljes gép leállásakor az egész alkalmazás leáll.
-- A Docker Volume **nem** biztonsági mentés; kritikus adatokhoz külön backup szükséges.
+A Flowdesk jelenlegi verziója egy felhasználói fiókok nélküli, közös feladatlistát kezelő alkalmazás.
+
+A rendszer nem tartalmaz felhasználói bejelentkezést vagy szerepköralapú jogosultságkezelést.
+
+A nyilvános alkalmazáscímet ismerő felhasználók ugyanazokat a feladatokat érhetik el.
+
+A Docker Swarm egyetlen csomóponton fut. A backend replikációja konténerkiesés esetén biztosít automatikus pótlást, de a teljes számítógép kiesése ellen nem nyújt védelmet.
+
+A PostgreSQL helyi Docker Volume-ot használ, amely tartós adattárolást biztosít, de önmagában nem jelent többgépes replikációt vagy külön adatbázis-mentést.
 
 ### 15.3. Lehetséges továbbfejlesztések
 
-Felhasználó-regisztráció és bejelentkezés, szerepkörök, több munkaterület, feladatokhoz rendelt felelősök, címkék, határidős értesítések, PostgreSQL-mentések, automatikus build/test pipeline, konténer registry, többnode-os Swarm, felhőben futó állandó szerver, állandó domain és megfigyelhetőségi dashboard.
-
-## 16. Bemutató forgatókönyv és ellenőrzőlista
-
-Az alábbi sorrendben néhány perc alatt bemutathatók a legfontosabb technikai tulajdonságok.
-
-| Sorrend | Mit mutatunk meg? | Parancs / tevékenység | Elvárt bizonyíték |
-|---:|---|---|---|
-| 1 | Aktív Swarm | `sudo docker node ls` | `Ready`, manager `Leader` |
-| 2 | Három szolgáltatás | `sudo docker service ls` | backend 3/3, frontend 1/1, adatbázis 1/1 |
-| 3 | Saját Docker image-ek | `sudo docker images` | `flowdesk-backend:2.0`, `flowdesk-frontend:2.0` |
-| 4 | Overlay hálózatok | `sudo docker network ls` | `todoapp_webnet`, `todoapp_dbnet` |
-| 5 | Volume és Secret | `sudo docker volume ls`; `sudo docker secret ls` | megvannak, titok értékét nem mutatjuk |
-| 6 | API–adatbázis kapcsolat | `curl -sS http://127.0.0.1:8080/api/health` | `status: ok` |
-| 7 | Felhasználói működés | Böngésző: `127.0.0.1:8080` | feladat létrehozható, listázható |
-| 8 | Skálázás | `sudo docker service scale todoapp_backend=5` | `5/5` |
-| 9 | Visszaskálázás | `sudo docker service scale todoapp_backend=3` | `3/3` |
-| 10 | Önjavítás | adatbázis-konténer `docker kill` tesztje | új task, majd `1/1` |
-| 11 | Adatmegőrzés | előre mentett feladat F5 után | konténercsere után is megvan |
-| 12 | Nyilvános HTTPS | aktuális Cloudflare Tunnel URL | működik másik eszközön |
-| 13 | Forráskód és leírás | GitHub repository | README, Dockerfile, stack, tesztek |
-
-### Bemutató előtt javasolt parancsok
-
-```bash
-cd ~/flowdesk-v2/flowdesk-swarm
-sudo systemctl start docker
-sudo docker service ls
-curl -sS http://127.0.0.1:8080/api/health
-python3 scripts/smoke_test.py
-```
-
-Ha nincs futó stack, előbb:
-
-```bash
-sudo docker stack deploy --resolve-image never -c stack.yml todoapp
-```
-
-**Bemutató közben figyeljünk arra**, hogy az adatbázis-konténer kill-tesztjét csak tesztadatokkal végezzük, a skálázást a végén 3 replikára állítsuk vissza, és a TryCloudflare aktuális címét ellenőrizzük másik eszközről is.
+- Felhasználói regisztráció és bejelentkezés.
+- Felhasználónként elkülönített feladatok.
+- Szerepkörök és jogosultságkezelés.
+- Több munkaterület.
+- Feladatok felelősökhöz rendelése.
+- Címkék és értesítések.
+- Automatikus adatbázis-mentések.
+- Többcsomópontos Docker Swarm-környezet.
+- Felhőalapú, folyamatosan működő alkalmazásszerver.
+- Állandó domain és HTTPS-konfiguráció.
+- Automatizált build- és tesztfolyamat.
 
 ---
 
-**Összegzés:** A Flowdesk egyszerre mutat be működő üzleti funkciókat (feladatkezelés és tartós adattárolás) és Docker Swarm üzemeltetési feladatokat (stack telepítés, replikáció, overlay hálózat, Secret, Volume, skálázás, önjavítás, nyilvános elérés). A GitHub-repozitórium tartalmazza az alkalmazás forráskódját, konfigurációját és tesztjeit, így a megoldás felépítése és működése mások számára is ellenőrizhető.
+## 16. Tesztelési dokumentáció
+
+A Flowdesk működését és Docker Swarm-konfigurációját külön dokumentáció foglalja össze.
+
+A tesztelés során ellenőriztük a három együttműködő szolgáltatást, a saját Docker image-eket, az overlay hálózatokat, a PostgreSQL tartós adattárolását, a backend skálázását, az automatikus helyreállítást, az API működését és a nyilvános HTTPS-elérést.
+
+### Kapcsolódó dokumentumok
+
+- **[Rendszerellenőrzési áttekintés (PDF)](docs/Flowdesk_Vedesi_Attekintes.pdf)** – A végrehajtott Docker-parancsok, működési magyarázatok és képernyőképek összefoglalása.
+- **[Tesztlépések és parancsok](docs/VEDES_TESZTEK.md)** – A szolgáltatások, hálózatok, adattárolás, skálázás és helyreállítás részletes ellenőrzése.
+
+A dokumentációban szereplő tesztek Ubuntu WSL környezetben, egy Docker Swarm-csomóponton készültek.
 
 ---
 
-## Védési dokumentáció
+## Összegzés
 
-A Docker Swarm szolgáltatások, a saját Docker image-ek, az overlay hálózatok, a PostgreSQL-adattárolás, a skálázás és az automatikus helyreállítás ellenőrzése.
+A Flowdesk 2.0 egy háromszolgáltatásos, Docker Swarm alatt működő feladatmenedzsment alkalmazás.
 
-- [Védési áttekintés – PDF](docs/Flowdesk_Vedesi_Attekintes.pdf)
-- [Parancsok és működési ellenőrzések](docs/VEDES_TESZTEK.md)
+A rendszer saját Docker image-eket, elkülönített overlay hálózatokat, PostgreSQL-alapú tartós adattárolást és több példányban futó backend szolgáltatást használ.
 
-A dokumentumok a végrehajtott parancsokat, azok rövid magyarázatát és a tesztelés során készített képernyőképeket tartalmazzák.
+A megvalósított infrastruktúra támogatja a szolgáltatások skálázását és a kiesett konténerpéldányok automatikus pótlását.
+
+A forráskód, a telepítési konfiguráció és a működési tesztek dokumentációja a GitHub-repozitóriumban érhető el.
