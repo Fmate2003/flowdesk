@@ -26,6 +26,7 @@ function stats() {
   $('stat-done').textContent=tasks.filter(t=>t.completed).length;
   $('stat-overdue').textContent=tasks.filter(isOverdue).length;
   $('count-pill').textContent=tasks.length;
+  const bar=$('completion-bar'); if(bar) bar.style.width=(tasks.length?100*tasks.filter(t=>t.completed).length/tasks.length:0)+'%';
 }
 function visibleTasks() {
   const query=$('search').value.trim().toLocaleLowerCase('hu');
@@ -72,7 +73,7 @@ function openDialog(task=null) {
   dialog.showModal();$('new-task').focus();
 }
 $('open-create').addEventListener('click',()=>openDialog());
-$('open-create-2').addEventListener('click',()=>openDialog());
+$('empty-create').addEventListener('click',()=>openDialog());
 $('close-dialog').addEventListener('click',()=>dialog.close());
 $('cancel-dialog').addEventListener('click',()=>dialog.close());
 $('search').addEventListener('input',render);

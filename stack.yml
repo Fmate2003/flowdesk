@@ -3,7 +3,7 @@ version: "3.8"
 
 services:
   frontend:
-    image: flowdesk-frontend:2.0
+    image: flowdesk-frontend:3.0
     ports:
       - target: 80
         published: 8080
